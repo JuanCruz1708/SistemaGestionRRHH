@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import tempfile
 import os
 import textwrap
-import streamlit as st
+
 #from openai import OpenAI
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
@@ -308,7 +308,7 @@ if menu_principal == "Gestión Nómina":
             datos["remuneracion_bruta"] = st.number_input("Remuneración Bruta", min_value=0, key="nuevo_remuneracion")
             datos["estado"] = st.selectbox("Estado", ["Activo", "Inactivo"], key="nuevo_estado")
             datos["fecha_alta"] = str(st.date_input("Fecha de Alta", key="nuevo_fecha_alta"))
-            datos["fecha_baja"] = None
+            datos["fecha_baja"] = ""
             opciones_jefes = {"Ninguno": None}
             for p in puestos:
                 opciones_jefes[p.nombre] = p.id
@@ -341,7 +341,7 @@ if menu_principal == "Gestión Nómina":
                     "remuneracion_bruta": st.number_input("Remuneración Bruta", value=emp.remuneracion_bruta, min_value=0, key=f"edit_remu_{eid}"),
                     "estado": st.selectbox("Estado", ["Activo", "Inactivo"], index=0 if emp.estado == "Activo" else 1, key=f"edit_estado_{eid}"),
                     "fecha_alta": str(st.date_input("Fecha de Alta", value=pd.to_datetime(emp.fecha_alta), key=f"edit_fecha_alta_{eid}")),
-                    "fecha_baja": str(emp.fecha_baja) if emp.fecha_baja else None,
+                    "fecha_baja": str(emp.fecha_baja) if emp.fecha_baja else "",
                 }
 
                 opciones_jefes = {"Ninguno": None}
