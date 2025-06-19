@@ -1,5 +1,5 @@
 import streamlit as st
-from models import SessionLocal, Empleado, Licencia, Puesto, Usuario
+from models import Base, engine, SessionLocal, Empleado, Licencia, Puesto, Usuario
 import pandas as pd
 from sqlalchemy.orm import joinedload
 import networkx as nx
@@ -12,6 +12,16 @@ import textwrap
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+def inicializar_base_de_datos():
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    if not db.query(Usuario).filter_by(username="admin").first():
+        admin = Usuario(username="admin", password="admin123", rol="admin")
+        db.add(admin)
+        db.commit()
+    db.close()
+
+inicializar_base_de_datos()
 def crear_base_y_usuario_admin():
     db = SessionLocal()
     try:
