@@ -247,27 +247,6 @@ def eliminar_puesto(puesto_id):
         db.commit()
     db.close()
 
-def obtener_centros_costo():
-    db = SessionLocal()
-    centros = db.query(CentroCosto).all()
-    db.close()
-    return centros
-
-def agregar_centro_costo(nombre):
-    db = SessionLocal()
-    nuevo = CentroCosto(nombre=nombre)
-    db.add(nuevo)
-    db.commit()
-    db.close()
-
-def eliminar_centro_costo(cc_id):
-    db = SessionLocal()
-    centro = db.query(CentroCosto).filter_by(id=cc_id).first()
-    if centro:
-        db.delete(centro)
-        db.commit()
-    db.close()
-
 # ========================= INTERFAZ STREAMLIT =============================
 st.sidebar.title("RRHH")
 
@@ -357,19 +336,11 @@ if menu_principal == "Gestión Nómina":
             datos["legajo"] = st.text_input("Legajo", key="nuevo_legajo")
             datos["genero"] = st.selectbox("Género", ["Masculino", "Femenino", "Otro"], key="nuevo_genero")
             datos["estado_civil"] = st.selectbox("Estado Civil", ["Soltero/a", "Casado/a", "Divorciado/a", "Otro"], key="nuevo_estado_civil")
-            from datetime import date
-            datos["fecha_nacimiento"] = str(st.date_input(
-                "Fecha de Nacimiento",
-                min_value=date(1950, 1, 1),
-                max_value=date.today(),
-                key="nuevo_fecha_nacimiento"
-            ))
+            datos["fecha_nacimiento"] = str(st.date_input("Fecha de Nacimiento", key="nuevo_fecha_nacimiento"))
             datos["dni"] = st.text_input("DNI", key="nuevo_dni")
             datos["direccion"] = st.text_input("Dirección", key="nuevo_direccion")
             datos["telefono"] = st.text_input("Teléfono", key="nuevo_telefono")
-            centros = obtener_centros_costo()
-            opciones_cc = [c.nombre for c in centros] if centros else ["Sin centros"]
-            datos["centro_costo"] = st.selectbox("Centro de Costo", opciones_cc, key="nuevo_centro_costo")
+            datos["centro_costo"] = st.text_input("Centro de Costo", key="nuevo_centro_costo")
             datos["puesto"] = st.selectbox("Puesto", [p.nombre for p in puestos], key="nuevo_puesto")
             datos["remuneracion_bruta"] = st.number_input("Remuneración Bruta", min_value=0, key="nuevo_remuneracion")
             datos["estado"] = st.selectbox("Estado", ["Activo", "Inactivo"], key="nuevo_estado")
@@ -595,27 +566,6 @@ if menu_principal == "Gestión Nómina":
             st.pyplot(fig)
         else:
             st.info("No hay puestos cargados aún.")
-     
-    if seccion == "Centro de Costos":
-        st.title("🏢 Gestión de Centros de Costo")
-        centros = obtener_centros_costo()
-
-        df = pd.DataFrame([{"ID": c.id, "Nombre": c.nombre} for c in centros])
-        st.dataframe(df, use_container_width=True)
-
-        with st.expander("➕ Crear nuevo centro de costo"):
-            nombre = st.text_input("Nombre del centro de costo")
-            if st.button("Guardar centro"):
-                agregar_centro_costo(nombre)
-                st.success("Centro de costo creado correctamente.")
-
-        with st.expander("🗑️ Eliminar centro de costo"):
-            if centros:
-                opciones = {f"{c.id} - {c.nombre}": c.id for c in centros}
-                seleccionado = st.selectbox("Seleccionar centro", list(opciones.keys()), key="eliminar_cc")
-                if st.button("Eliminar"):
-                    eliminar_centro_costo(opciones[seleccionado])
-                    st.success("Centro eliminado correctamente.")
 
 if menu_principal == "Asesoramiento":
     st.title("🧠 Asesoramiento para RRHH")
@@ -813,4 +763,3 @@ Empresa
             path = generar_formulario_pdf("preaviso", contenido)
             with open(path, "rb") as f:
                 st.download_button("📥 Descargar PDF", f, file_name="preaviso.pdf", mime="application/pdf")
-    
