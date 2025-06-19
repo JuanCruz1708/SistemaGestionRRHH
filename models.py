@@ -60,3 +60,8 @@ class Usuario(Base):
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)  # Guardado en texto plano por simplicidad (lo mejor sería hasheado)
     rol = Column(String, nullable=False)  # Ej: "admin", "rh", "consulta"
+
+class CentroCosto(Base):
+    __tablename__ = "centros_costo"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, unique=True, nullable=False)

@@ -1,5 +1,5 @@
 import streamlit as st
-from models import Base, engine, SessionLocal, Empleado, Licencia, Puesto, Usuario
+from models import Base, engine, SessionLocal, Empleado, Licencia, Puesto, Usuario, CentroCosto
 import pandas as pd
 from sqlalchemy.orm import joinedload
 import networkx as nx
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import tempfile
 import os
 import textwrap
-
+from datetime import date
 #from openai import OpenAI
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
@@ -247,6 +247,19 @@ def eliminar_puesto(puesto_id):
         db.commit()
     db.close()
 
+def obtener_centros_costo():
+    db = SessionLocal()
+    centros = db.query(CentroCosto).all()
+    db.close()
+    return centros
+
+def agregar_centro_costo(nombre):
+    db = SessionLocal()
+    nuevo = CentroCosto(nombre=nombre)
+    db.add(nuevo)
+    db.commit()
+    db.close()
+
 # ========================= INTERFAZ STREAMLIT =============================
 st.sidebar.title("RRHH")
 
@@ -276,7 +289,7 @@ if menu_principal == "Inicio":
     st.markdown("Bienvenido al sistema. Usá el menú lateral para navegar por las funcionalidades.")
 
 if menu_principal == "Gestión Nómina":
-    seccion = st.sidebar.radio("Administración del Personal", ["Empleados", "Licencias", "Puestos", "Organigrama"])
+    seccion = st.sidebar.radio("Administración del Personal", ["Empleados", "Licencias", "Puestos", "Centro de Costo", "Organigrama"])
 
     if seccion == "Empleados":
         st.title("👥 Gestión de Empleados")
@@ -336,11 +349,14 @@ if menu_principal == "Gestión Nómina":
             datos["legajo"] = st.text_input("Legajo", key="nuevo_legajo")
             datos["genero"] = st.selectbox("Género", ["Masculino", "Femenino", "Otro"], key="nuevo_genero")
             datos["estado_civil"] = st.selectbox("Estado Civil", ["Soltero/a", "Casado/a", "Divorciado/a", "Otro"], key="nuevo_estado_civil")
-            datos["fecha_nacimiento"] = str(st.date_input("Fecha de Nacimiento", key="nuevo_fecha_nacimiento"))
+            datos["fecha_nacimiento"] = str(
+                st.date_input("Fecha de Nacimiento", min_value=date(1950, 1, 1), max_value=date.today(), key="nuevo_fecha_nacimiento")
+            )
             datos["dni"] = st.text_input("DNI", key="nuevo_dni")
             datos["direccion"] = st.text_input("Dirección", key="nuevo_direccion")
             datos["telefono"] = st.text_input("Teléfono", key="nuevo_telefono")
-            datos["centro_costo"] = st.text_input("Centro de Costo", key="nuevo_centro_costo")
+            centros = obtener_centros_costo()
+            datos["centro_costo"] = st.selectbox("Centro de Costo", [c.nombre for c in centros], key="nuevo_centro_costo")
             datos["puesto"] = st.selectbox("Puesto", [p.nombre for p in puestos], key="nuevo_puesto")
             datos["remuneracion_bruta"] = st.number_input("Remuneración Bruta", min_value=0, key="nuevo_remuneracion")
             datos["estado"] = st.selectbox("Estado", ["Activo", "Inactivo"], key="nuevo_estado")
@@ -362,6 +378,13 @@ if menu_principal == "Gestión Nómina":
                 seleccionado = st.selectbox("Seleccionar empleado", list(opciones.keys()), key="editar_empleado")
                 eid = opciones[seleccionado]
                 emp = next(e for e in empleados if e.id == eid)
+                centros = obtener_centros_costo()
+                nombres_centros = [c.nombre for c in centros]
+                if emp.centro_costo in nombres_centros:
+                    idx_cc = nombres_centros.index(emp.centro_costo)
+                else:
+                    nombres_centros.insert(0, emp.centro_costo or "Sin asignar")
+                    idx_cc = 0
 
                 datos = {
                     "apellido": st.text_input("Apellido", value=emp.apellido, key=f"edit_apellido_{eid}"),
@@ -369,11 +392,24 @@ if menu_principal == "Gestión Nómina":
                     "legajo": st.text_input("Legajo", value=emp.legajo, key=f"edit_legajo_{eid}"),
                     "genero": st.selectbox("Género", ["Masculino", "Femenino", "Otro"], index=["Masculino", "Femenino", "Otro"].index(emp.genero), key=f"edit_genero_{eid}"),
                     "estado_civil": st.selectbox("Estado Civil", ["Soltero/a", "Casado/a", "Divorciado/a", "Otro"], index=["Soltero/a", "Casado/a", "Divorciado/a", "Otro"].index(emp.estado_civil), key=f"edit_estado_civil_{eid}"),
-                    "fecha_nacimiento": str(st.date_input("Fecha de Nacimiento", value=pd.to_datetime(emp.fecha_nacimiento), key=f"edit_fecha_nac_{eid}")),
+                    "fecha_nacimiento": str(
+                        st.date_input(
+                            "Fecha de Nacimiento",
+                            value=pd.to_datetime(emp.fecha_nacimiento),
+                            min_value=date(1950, 1, 1),
+                            max_value=date.today(),
+                            key=f"edit_fecha_nac_{eid}"
+                        )
+                    ),
                     "dni": st.text_input("DNI", value=emp.dni, key=f"edit_dni_{eid}"),
                     "direccion": st.text_input("Dirección", value=emp.direccion, key=f"edit_direccion_{eid}"),
                     "telefono": st.text_input("Teléfono", value=emp.telefono, key=f"edit_telefono_{eid}"),
-                    "centro_costo": st.text_input("Centro de Costo", value=emp.centro_costo, key=f"edit_cc_{eid}"),
+                    "centro_costo": st.selectbox(
+                        "Centro de Costo",
+                        nombres_centros,
+                        index=idx_cc,
+                        key=f"edit_cc_{eid}"
+                    ),
                     "puesto": st.text_input("Puesto", value=emp.puesto, key=f"edit_puesto_{eid}"),
                     "remuneracion_bruta": st.number_input("Remuneración Bruta", value=emp.remuneracion_bruta, min_value=0, key=f"edit_remu_{eid}"),
                     "estado": st.selectbox("Estado", ["Activo", "Inactivo"], index=0 if emp.estado == "Activo" else 1, key=f"edit_estado_{eid}"),
@@ -393,8 +429,8 @@ if menu_principal == "Gestión Nómina":
                 if st.button("Guardar cambios", key=f"btn_guardar_{eid}"):
                     editar_empleado(eid, **datos)
                     st.success("Empleado actualizado")
-            else:
-                st.info("No hay empleados para editar.")
+                else:
+                    st.info("No hay empleados para editar.")
 
         with st.expander("🗑️ Eliminar empleado"):
             if empleados:
@@ -512,6 +548,72 @@ if menu_principal == "Gestión Nómina":
                         st.success("Puesto eliminado")
             else:
                 st.info("No hay puestos registrados.")
+    
+    if seccion == "Centro de Costo":
+        st.title("🏢 Gestión de Centros de Costo")
+        centros = obtener_centros_costo()
+        df = pd.DataFrame([{"ID": c.id, "Nombre": c.nombre} for c in centros])
+        st.dataframe(df, use_container_width=True)
+
+        with st.expander("➕ Crear nuevo centro de costo"):
+            nombre_nuevo = st.text_input("Nombre del centro de costo", key="nuevo_cc")
+            if st.button("Guardar centro de costo"):
+                if nombre_nuevo.strip():
+                    agregar_centro_costo(nombre_nuevo.strip())
+                    st.success("Centro de costo creado correctamente.")
+                    st.rerun()
+                else:
+                    st.warning("El nombre no puede estar vacío.")
+
+        with st.expander("✏️ Editar centro de costo"):
+            if centros:
+                opciones = {f"{c.id} - {c.nombre}": c.id for c in centros}
+                seleccionado = st.selectbox("Seleccionar centro", list(opciones.keys()), key="editar_cc")
+                cc_id = opciones[seleccionado]
+                actual = next((c for c in centros if c.id == cc_id), None)
+                nuevo_nombre = st.text_input("Nuevo nombre", value=actual.nombre, key="nuevo_nombre_cc")
+
+                if st.button("Guardar cambios", key="guardar_cambios_cc"):
+                    db = SessionLocal()
+                    centro = db.query(CentroCosto).filter_by(id=cc_id).first()
+                    if centro:
+                        centro.nombre = nuevo_nombre
+                        db.commit()
+                        db.close()
+                        st.success("Centro de costo actualizado.")
+                        st.rerun()
+                    else:
+                        db.close()
+                        st.error("No se encontró el centro de costo.")
+
+        with st.expander("🗑️ Eliminar centro de costo"):
+            if centros:
+                opciones = {f"{c.id} - {c.nombre}": c.id for c in centros}
+                seleccionado = st.selectbox("Centro a eliminar", list(opciones.keys()), key="eliminar_cc")
+                cc_id = opciones[seleccionado]
+                centro_nombre = next(c.nombre for c in centros if c.id == cc_id)
+
+                if st.button("Eliminar centro", key="btn_eliminar_cc"):
+                    empleados = obtener_empleados()
+                    en_uso = any(e.centro_costo == centro_nombre for e in empleados)
+
+                    if en_uso:
+                        st.warning("❌ No se puede eliminar este centro de costo porque está siendo utilizado por al menos un empleado.")
+                    else:
+                        db = SessionLocal()
+                        centro = db.query(CentroCosto).filter_by(id=cc_id).first()
+                        if centro:
+                            db.delete(centro)
+                            db.commit()
+                            db.close()
+                            st.success("Centro eliminado correctamente.")
+                            st.rerun()
+                        else:
+                            db.close()
+                            st.error("No se encontró el centro de costo.")
+            else:
+                st.info("No hay centros registrados.")
+
 
     if seccion == "Organigrama":
         st.title("🏢 Organigrama Jerárquico de Puestos")
