@@ -12,6 +12,24 @@ import textwrap
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+def crear_base_y_usuario_admin():
+    db = SessionLocal()
+    try:
+        # Intenta consultar usuarios. Si falla, la tabla no existe
+        db.query(Usuario).all()
+    except:
+        # Si no existe la tabla, la crea
+        Usuario.metadata.create_all(bind=db.bind)
+
+    existente = db.query(Usuario).filter_by(username="admin").first()
+    if not existente:
+        nuevo = Usuario(username="admin", password="admin123", rol="admin")
+        db.add(nuevo)
+        db.commit()
+        print("✅ Usuario 'admin' creado automáticamente.")
+    db.close()
+crear_base_y_usuario_admin()
+
 def obtener_usuarios():
     db = SessionLocal()
     usuarios = db.query(Usuario).all()
