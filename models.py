@@ -4,8 +4,7 @@ from sqlalchemy import Column, String
 
 # Configuración de la base de datos SQLite
 DATABASE_URL = "sqlite:///./rrhh.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 class Empleado(Base):
@@ -65,3 +64,15 @@ class CentroCosto(Base):
     __tablename__ = "centros_costo"
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, unique=True, nullable=False)
+
+class CuentaEmpresa(Base):
+    __tablename__ = "cuentas_empresa"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre_empresa = Column(String, unique=True, index=True)
+    usuario = Column(String, unique=True, index=True)
+    password = Column(String)
+    base_datos = Column(String)
+
+# Conexión global para autenticación de cuentas
+engine_global = create_engine("sqlite:///./cuentas.db", connect_args={"check_same_thread": False})
+SessionGlobal = sessionmaker(autocommit=False, autoflush=False, bind=engine_global)

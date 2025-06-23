@@ -1,5 +1,5 @@
 import streamlit as st
-from models import Base, engine, SessionLocal, Empleado, Licencia, Puesto, Usuario, CentroCosto
+from models import Base, Empleado, Licencia, Puesto, Usuario, CentroCosto
 import pandas as pd
 from sqlalchemy.orm import joinedload
 import networkx as nx
@@ -8,15 +8,43 @@ import tempfile
 import os
 import textwrap
 from datetime import date
+from models import CuentaEmpresa
+from main import get_engine_for_user, SessionGlobal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from main import inicializar_base_cliente  # Asegurate de importar esta función
 #from openai import OpenAI
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+temp_engine = create_engine("sqlite:///./rrhh.db", connect_args={"check_same_thread": False})
+SessionTemp = sessionmaker(autocommit=False, autoflush=False, bind=temp_engine)
+def autenticar_usuario(username, password):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models import CuentaEmpresa
+
+    engine_global = create_engine("sqlite:///./cuentas.db", connect_args={"check_same_thread": False})
+    SessionGlobal = sessionmaker(autocommit=False, autoflush=False, bind=engine_global)
+    db = SessionGlobal()
+    cuenta = db.query(CuentaEmpresa).filter_by(usuario=username, password=password).first()
+    db.close()
+    if cuenta:
+        return cuenta
+    else:
+        return None
+
 def inicializar_base_de_datos():
     try:
         # Crea las tablas si no existen
-        Base.metadata.create_all(bind=engine)
-        db = SessionLocal()
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        # Crear base temporal solo para definir tablas en rrhh.db (por compatibilidad)
+        temp_engine = create_engine("sqlite:///./rrhh.db", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(bind=temp_engine)
+        SessionTemp = sessionmaker(autocommit=False, autoflush=False, bind=temp_engine)
+        db = SessionTemp()
 
         # Verifica si el usuario admin ya existe
         if not db.query(Usuario).filter_by(username="admin").first():
@@ -32,7 +60,7 @@ def inicializar_base_de_datos():
 
 inicializar_base_de_datos()
 def crear_base_y_usuario_admin():
-    db = SessionLocal()
+    db = SessionTemp()
     try:
         # Intenta consultar usuarios. Si falla, la tabla no existe
         db.query(Usuario).all()
@@ -55,26 +83,26 @@ def obtener_usuarios():
     db.close()
     return usuarios
 
-def autenticar_usuario(username, password):
-    usuarios = obtener_usuarios()
-    return next((u for u in usuarios if u.username == username and u.password == password), None)
-
 def iniciar_sesion():
     st.title("🔐 Iniciar sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
+
     if st.button("Iniciar sesión"):
-        usuario = autenticar_usuario(username, password)
-        if usuario:
+        cuenta = autenticar_usuario(username, password)
+        if cuenta:
+            engine, nueva_sesion = get_engine_for_user(cuenta.base_datos)
+            st.session_state["engine"] = engine
+            st.session_state["SessionLocal"] = nueva_sesion
+            inicializar_base_cliente(engine)
             st.session_state["usuario"] = {
-                "id": usuario.id,
-                "username": usuario.username,
-                "rol": usuario.rol
+                "username": cuenta.usuario,
+                "rol": "admin"
             }
-            st.success(f"Bienvenido, {usuario.username}")
+            st.success("Sesión iniciada correctamente")
             st.rerun()
         else:
-            st.error("Credenciales incorrectas")
+            st.error("Usuario o contraseña incorrectos")
 
 def cerrar_sesion():
     if st.sidebar.button("Cerrar sesión"):
@@ -150,32 +178,32 @@ def generar_formulario_pdf(nombre_archivo, contenido):
 
 # ======================== FUNCIONES BASE DE DATOS ==========================
 def obtener_empleados():
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     empleados = db.query(Empleado).all()
     db.close()
     return empleados
 
 def obtener_licencias():
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     licencias = db.query(Licencia).options(joinedload(Licencia.empleado)).all()
     db.close()
     return licencias
 
 def obtener_puestos():
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     puestos = db.query(Puesto).all()
     db.close()
     return puestos
 
 def agregar_empleado(**kwargs):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     nuevo = Empleado(**kwargs)
     db.add(nuevo)
     db.commit()
     db.close()
 
 def editar_empleado(empleado_id, **kwargs):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     empleado = db.query(Empleado).filter_by(id=empleado_id).first()
     for key, value in kwargs.items():
         setattr(empleado, key, value)
@@ -183,7 +211,7 @@ def editar_empleado(empleado_id, **kwargs):
     db.close()
 
 def eliminar_empleado(empleado_id):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     empleado = db.query(Empleado).filter_by(id=empleado_id).first()
     if empleado:
         db.delete(empleado)
@@ -191,7 +219,7 @@ def eliminar_empleado(empleado_id):
     db.close()
 
 def agregar_licencia(empleado_id, tipo, fecha_inicio, fecha_fin, observaciones):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     nueva = Licencia(
         empleado_id=empleado_id,
         tipo=tipo,
@@ -204,7 +232,7 @@ def agregar_licencia(empleado_id, tipo, fecha_inicio, fecha_fin, observaciones):
     db.close()
 
 def editar_licencia(licencia_id, tipo, fecha_inicio, fecha_fin, observaciones):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     licencia = db.query(Licencia).filter_by(id=licencia_id).first()
     if licencia:
         licencia.tipo = tipo
@@ -215,7 +243,7 @@ def editar_licencia(licencia_id, tipo, fecha_inicio, fecha_fin, observaciones):
     db.close()
 
 def eliminar_licencia(licencia_id):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     licencia = db.query(Licencia).filter_by(id=licencia_id).first()
     if licencia:
         db.delete(licencia)
@@ -223,14 +251,14 @@ def eliminar_licencia(licencia_id):
     db.close()
 
 def agregar_puesto(nombre, descripcion, jefe_id=None):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     nuevo = Puesto(nombre=nombre, descripcion=descripcion, jefe_id=jefe_id)
     db.add(nuevo)
     db.commit()
     db.close()
 
 def editar_puesto(puesto_id, nombre, descripcion, jefe_id):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     puesto = db.query(Puesto).filter_by(id=puesto_id).first()
     if puesto:
         puesto.nombre = nombre
@@ -240,7 +268,7 @@ def editar_puesto(puesto_id, nombre, descripcion, jefe_id):
     db.close()
 
 def eliminar_puesto(puesto_id):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     puesto = db.query(Puesto).filter_by(id=puesto_id).first()
     if puesto:
         db.delete(puesto)
@@ -248,13 +276,13 @@ def eliminar_puesto(puesto_id):
     db.close()
 
 def obtener_centros_costo():
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     centros = db.query(CentroCosto).all()
     db.close()
     return centros
 
 def agregar_centro_costo(nombre):
-    db = SessionLocal()
+    db = st.session_state["SessionLocal"]()
     nuevo = CentroCosto(nombre=nombre)
     db.add(nuevo)
     db.commit()
@@ -574,7 +602,7 @@ if menu_principal == "Gestión Nómina":
                 nuevo_nombre = st.text_input("Nuevo nombre", value=actual.nombre, key="nuevo_nombre_cc")
 
                 if st.button("Guardar cambios", key="guardar_cambios_cc"):
-                    db = SessionLocal()
+                    db = st.session_state["SessionLocal"]()
                     centro = db.query(CentroCosto).filter_by(id=cc_id).first()
                     if centro:
                         centro.nombre = nuevo_nombre
@@ -600,7 +628,7 @@ if menu_principal == "Gestión Nómina":
                     if en_uso:
                         st.warning("❌ No se puede eliminar este centro de costo porque está siendo utilizado por al menos un empleado.")
                     else:
-                        db = SessionLocal()
+                        db = st.session_state["SessionLocal"]()
                         centro = db.query(CentroCosto).filter_by(id=cc_id).first()
                         if centro:
                             db.delete(centro)
@@ -865,3 +893,19 @@ Empresa
             path = generar_formulario_pdf("preaviso", contenido)
             with open(path, "rb") as f:
                 st.download_button("📥 Descargar PDF", f, file_name="preaviso.pdf", mime="application/pdf")
+
+def crear_cuentas_de_prueba():
+    engine_global = create_engine("sqlite:///./cuentas.db", connect_args={"check_same_thread": False})
+    SessionGlobal = sessionmaker(autocommit=False, autoflush=False, bind=engine_global)
+
+    Base.metadata.create_all(bind=engine_global)
+
+    db = SessionGlobal()
+    if not db.query(CuentaEmpresa).filter_by(usuario="empresa1").first():
+        db.add(CuentaEmpresa(nombre_empresa="Empresa Uno", usuario="empresa1", password="123", base_datos="empresa1.db"))
+    if not db.query(CuentaEmpresa).filter_by(usuario="empresa2").first():
+        db.add(CuentaEmpresa(nombre_empresa="Empresa Dos", usuario="empresa2", password="123", base_datos="empresa2.db"))
+    db.commit()
+    db.close()
+
+crear_cuentas_de_prueba()

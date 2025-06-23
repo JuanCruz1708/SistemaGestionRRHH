@@ -1,7 +1,8 @@
-from models import Base, engine
+from sqlalchemy import create_engine
+from models import Base
 
-# Crea las tablas en la base de datos según el modelo actualizado
-Base.metadata.drop_all(bind=engine)  # Elimina las tablas existentes (¡CUIDADO! borra todos los datos)
-Base.metadata.create_all(bind=engine)  # Crea las nuevas tablas
+# Crear la tabla cuentas_empresa en la base cuentas.db
+engine = create_engine("sqlite:///cuentas.db", connect_args={"check_same_thread": False})
+Base.metadata.create_all(bind=engine)
 
-print("✅ Base de datos recreada con éxito.")
+print("✅ Tabla 'cuentas_empresa' creada correctamente.")
