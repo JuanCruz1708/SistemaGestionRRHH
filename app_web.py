@@ -19,6 +19,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 temp_engine = create_engine("sqlite:///./rrhh.db", connect_args={"check_same_thread": False})
 SessionTemp = sessionmaker(autocommit=False, autoflush=False, bind=temp_engine)
+
 def autenticar_usuario(username, password):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -83,8 +84,10 @@ def obtener_usuarios():
     db.close()
     return usuarios
 
+st.set_page_config(page_title="RRHH", layout="wide")
+
 def iniciar_sesion():
-    st.title("🔐 Iniciar sesión")
+    st.header("🔐 Iniciar sesión")  # se ve solo en login
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
@@ -108,6 +111,17 @@ def cerrar_sesion():
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.pop("usuario", None)
         st.rerun()
+
+# 🔐 Control de sesión
+if "usuario" not in st.session_state:
+    iniciar_sesion()
+    st.stop()  # NO continúa ejecutando el resto del sistema si no hay login
+
+# ✅ Si hay usuario, ahora sí mostramos todo el sistema
+usuario_actual = st.session_state["usuario"]
+st.sidebar.markdown(f"👤 Usuario: **{usuario_actual['username']}** ({usuario_actual['rol']})")
+cerrar_sesion()
+
 # Agregá esta función acá arriba:
 def generar_reporte_empleados_pdf(empleados):
     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
@@ -130,15 +144,6 @@ def generar_reporte_empleados_pdf(empleados):
 
     c.save()
     return temp.name
-
-st.set_page_config(page_title="RRHH", layout="wide")
-if "usuario" not in st.session_state:
-    iniciar_sesion()
-    st.stop()
-else:
-    usuario_actual = st.session_state["usuario"]
-    st.sidebar.markdown(f"👤 Usuario: **{usuario_actual['username']}** ({usuario_actual['rol']})")
-    cerrar_sesion()
 
 def generar_formulario_pdf(nombre_archivo, contenido):
     from reportlab.pdfgen import canvas
@@ -291,35 +296,40 @@ def agregar_centro_costo(nombre):
 # ========================= INTERFAZ STREAMLIT =============================
 st.sidebar.title("RRHH")
 
-menu_principal = st.sidebar.radio("Menú", ["Inicio", "Gestión Nómina", "Formularios", "Asesoramiento"])
+menu_principal = st.sidebar.radio("Menú", ["Inicio", "Gestión Nómina", "Formularios", "Asesoramiento", "Simulador"])
 
 if menu_principal == "Inicio":
-    st.title("🏠 Bienvenido al sistema RRHH")
-    st.markdown("Accedé a las funciones del sistema desde el menú lateral.")
-    st.title("🏠 Dashboard de RRHH")
+    st.empty()
+    with st.container():
+        st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
+        st.title("🏠 Bienvenido al sistema RRHH")
+        st.markdown("Accedé a las funciones del sistema desde el menú lateral.")
+        st.markdown("---")
 
-    empleados = obtener_empleados()
-    licencias = obtener_licencias()
-    puestos = obtener_puestos()
+        st.title("🏠 Dashboard de RRHH")
 
-    total_empleados = len(empleados)
-    activos = sum(1 for e in empleados if e.estado == "Activo")
-    inactivos = total_empleados - activos
-    total_licencias = len(licencias)
-    total_puestos = len(puestos)
+        empleados = obtener_empleados()
+        licencias = obtener_licencias()
+        puestos = obtener_puestos()
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("👥 Empleados activos", activos)
-    col2.metric("🛌 Licencias registradas", total_licencias)
-    col3.metric("🏷️ Puestos definidos", total_puestos)
+        total_empleados = len(empleados)
+        activos = sum(1 for e in empleados if e.estado == "Activo")
+        inactivos = total_empleados - activos
+        total_licencias = len(licencias)
+        total_puestos = len(puestos)
 
-    st.markdown("---")
-    st.markdown("Bienvenido al sistema. Usá el menú lateral para navegar por las funcionalidades.")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("👥 Empleados activos", activos)
+        col2.metric("🛌 Licencias registradas", total_licencias)
+        col3.metric("🏷️ Puestos definidos", total_puestos)
 
+        st.markdown("---")
+        st.markdown("Usá el menú lateral para navegar por las funcionalidades.")
+    
 if menu_principal == "Gestión Nómina":
     seccion = st.sidebar.radio("Administración del Personal", ["Empleados", "Licencias", "Puestos", "Centro de Costo", "Organigrama"])
-
     if seccion == "Empleados":
+        st.empty()
         st.title("👥 Gestión de Empleados")
         empleados = obtener_empleados()
         puestos = obtener_puestos()
@@ -447,7 +457,7 @@ if menu_principal == "Gestión Nómina":
 
                 opciones_jefes = {"Ninguno": None}
                 for p in puestos:
-                     opciones_jefes[p.nombre] = p.id
+                    opciones_jefes[p.nombre] = p.id
 
                 jefe_valor = next((k for k, v in opciones_jefes.items() if v == emp.jefe_id), "Ninguno")
                 jefe_nombre = st.selectbox("Puesto superior", list(opciones_jefes.keys()), index=list(opciones_jefes.keys()).index(jefe_valor), key=f"edit_jefe_{eid}")
@@ -471,7 +481,8 @@ if menu_principal == "Gestión Nómina":
             else:
                 st.info("No hay empleados para eliminar.")
     
-    if seccion == "Licencias":
+    elif seccion == "Licencias":
+        st.empty()
         st.title("📅 Registro de Licencias")
         licencias = obtener_licencias()
         empleados = obtener_empleados()
@@ -528,7 +539,8 @@ if menu_principal == "Gestión Nómina":
                 st.info("No hay licencias registradas.")
 
 
-    if seccion == "Puestos":
+    elif seccion == "Puestos":
+        st.empty()
         st.title("🏷️ Gestión de Puestos")
         puestos = obtener_puestos()
         df = pd.DataFrame([p.__dict__ for p in puestos]).drop(columns=["_sa_instance_state"], errors='ignore')
@@ -577,7 +589,8 @@ if menu_principal == "Gestión Nómina":
             else:
                 st.info("No hay puestos registrados.")
     
-    if seccion == "Centro de Costo":
+    elif seccion == "Centro de Costo":
+        st.empty()
         st.title("🏢 Gestión de Centros de Costo")
         centros = obtener_centros_costo()
         df = pd.DataFrame([{"ID": c.id, "Nombre": c.nombre} for c in centros])
@@ -642,8 +655,8 @@ if menu_principal == "Gestión Nómina":
             else:
                 st.info("No hay centros registrados.")
 
-
-    if seccion == "Organigrama":
+    elif seccion == "Organigrama":
+        st.empty()
         st.title("🏢 Organigrama Jerárquico de Puestos")
         puestos = obtener_puestos()
 
@@ -698,201 +711,205 @@ if menu_principal == "Gestión Nómina":
             st.info("No hay puestos cargados aún.")
 
 if menu_principal == "Asesoramiento":
-    st.title("🧠 Asesoramiento para RRHH")
+    st.empty()
+    with st.container():
+        st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
+        st.title("🧠 Asesoramiento para RRHH")
+        st.markdown("Accedé a contenido de ayuda y buenas prácticas para la gestión de Recursos Humanos en tu organización.")
 
-    st.markdown("Accedé a contenido de ayuda y buenas prácticas para la gestión de Recursos Humanos en tu organización.")
+        st.subheader("📚 Guías y Buenas Prácticas")
+        with st.expander("✅ Gestión de licencias y ausencias"):
+            st.markdown("""
+    - **Comunicación previa:** Siempre pedir al empleado que notifique la ausencia con la mayor anticipación posible.
+    - **Documentación:** Requerir certificado médico o respaldo en casos de enfermedad.
+    - **Registro en el sistema:** Cargar la licencia en el módulo correspondiente y actualizar el estado.
+    - **Seguimiento:** Contactar al empleado si se extiende la ausencia.
 
-    st.subheader("📚 Guías y Buenas Prácticas")
-    with st.expander("✅ Gestión de licencias y ausencias"):
+    **Tip:** Usá el módulo “Licencias” para mantener trazabilidad completa.
+    """)
+
+        with st.expander("📄 Procedimiento de desvinculación responsable"):
+            st.markdown("""
+    - **Preaviso obligatorio:** Debe enviarse con la antelación legal (15 días mínimo).
+    - **Generar documentación:** Usá el módulo Formularios → “Preaviso” y “Carta de despido”.
+    - **Firma de recibos:** Documentar todo el proceso con recibos firmados.
+    - **Certificados:** Emitir el Certificado de trabajo y asegurar liquidación final.
+
+    **Consejo:** Comunicá con respeto y empatía, incluso en desvinculaciones disciplinarias.
+    """)
+
+        with st.expander("👥 Armado de organigramas y jerarquías"):
+            st.markdown("""
+    - **Claridad de roles:** Cada puesto debe tener un jefe definido (cuando aplique).
+    - **Estructura jerárquica:** Revisar que los puestos se conecten adecuadamente en el organigrama.
+    - **Actualización frecuente:** Al cambiar roles o estructura, actualizar el módulo “Puestos”.
+
+    **Herramienta clave:** Usá el módulo “Organigrama” para visualizar dependencias jerárquicas.
+    """)
+
+        st.subheader("🔗 Recursos útiles")
         st.markdown("""
-- **Comunicación previa:** Siempre pedir al empleado que notifique la ausencia con la mayor anticipación posible.
-- **Documentación:** Requerir certificado médico o respaldo en casos de enfermedad.
-- **Registro en el sistema:** Cargar la licencia en el módulo correspondiente y actualizar el estado.
-- **Seguimiento:** Contactar al empleado si se extiende la ausencia.
+    - [Ley de Contrato de Trabajo (Argentina)](https://www.argentina.gob.ar/normativa/nacional/ley-20744-2668)
+    - [AFIP – Manual empleadores](https://www.afip.gob.ar/empleadores/)
+    - [Ministerio de Trabajo](https://www.argentina.gob.ar/trabajo)
+    """)
+        #st.markdown("Podés conversar con el asistente para resolver dudas de gestión de RRHH.")
 
-**Tip:** Usá el módulo “Licencias” para mantener trazabilidad completa.
-""")
+        #if "chat" not in st.session_state:
+            #st.session_state.chat = [
+                #{"role": "system", "content": "Sos un asistente especializado en Recursos Humanos para PYMEs argentinas. Respondé en español con ejemplos claros."}
+            #]
 
-    with st.expander("📄 Procedimiento de desvinculación responsable"):
-        st.markdown("""
-- **Preaviso obligatorio:** Debe enviarse con la antelación legal (15 días mínimo).
-- **Generar documentación:** Usá el módulo Formularios → “Preaviso” y “Carta de despido”.
-- **Firma de recibos:** Documentar todo el proceso con recibos firmados.
-- **Certificados:** Emitir el Certificado de trabajo y asegurar liquidación final.
+        # Mostrar el historial
+        #for m in st.session_state.chat[1:]:
+            #if m["role"] == "user":
+                #st.markdown(f"**👤 Usuario:** {m['content']}")
+            #else:
+                #st.markdown(f"**🤖 Asistente:** {m['content']}")
 
-**Consejo:** Comunicá con respeto y empatía, incluso en desvinculaciones disciplinarias.
-""")
-
-    with st.expander("👥 Armado de organigramas y jerarquías"):
-        st.markdown("""
-- **Claridad de roles:** Cada puesto debe tener un jefe definido (cuando aplique).
-- **Estructura jerárquica:** Revisar que los puestos se conecten adecuadamente en el organigrama.
-- **Actualización frecuente:** Al cambiar roles o estructura, actualizar el módulo “Puestos”.
-
-**Herramienta clave:** Usá el módulo “Organigrama” para visualizar dependencias jerárquicas.
-""")
-
-    st.subheader("🔗 Recursos útiles")
-    st.markdown("""
-- [Ley de Contrato de Trabajo (Argentina)](https://www.argentina.gob.ar/normativa/nacional/ley-20744-2668)
-- [AFIP – Manual empleadores](https://www.afip.gob.ar/empleadores/)
-- [Ministerio de Trabajo](https://www.argentina.gob.ar/trabajo)
-""")
-    #st.markdown("Podés conversar con el asistente para resolver dudas de gestión de RRHH.")
-
-    #if "chat" not in st.session_state:
-        #st.session_state.chat = [
-            #{"role": "system", "content": "Sos un asistente especializado en Recursos Humanos para PYMEs argentinas. Respondé en español con ejemplos claros."}
-        #]
-
-    # Mostrar el historial
-    #for m in st.session_state.chat[1:]:
-        #if m["role"] == "user":
-            #st.markdown(f"**👤 Usuario:** {m['content']}")
-        #else:
-            #st.markdown(f"**🤖 Asistente:** {m['content']}")
-
-    # Ingreso de nuevo mensaje
-    #pregunta = st.text_input("Escribí tu consulta:", key="input_usuario")
-    #if st.button("Enviar"):
-        #if pregunta:
-            #st.session_state.chat.append({"role": "user", "content": pregunta})
-            #respuesta = responder_mensaje(st.session_state.chat)
-            #st.session_state.chat.append({"role": "assistant", "content": respuesta})
-            #st.rerun()
-
+        # Ingreso de nuevo mensaje
+        #pregunta = st.text_input("Escribí tu consulta:", key="input_usuario")
+        #if st.button("Enviar"):
+            #if pregunta:
+                #st.session_state.chat.append({"role": "user", "content": pregunta})
+                #respuesta = responder_mensaje(st.session_state.chat)
+                #st.session_state.chat.append({"role": "assistant", "content": respuesta})
+                    #st.rerun()
 
 if menu_principal == "Formularios":
-    st.title("📑 Formularios RRHH")
-    formulario = st.sidebar.radio("Seleccioná un formulario", [
-        "Carta de despido",
-        "Certificado de trabajo",
-        "Comunicación de vacaciones",
-        "Notificación de sanción",
-        "Preaviso"
-    ])
+    st.empty()
+    with st.container():
+        st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
+        st.title("📑 Formularios RRHH")
+        formulario = st.sidebar.radio("Seleccioná un formulario", [
+            "Carta de despido",
+            "Certificado de trabajo",
+            "Comunicación de vacaciones",
+            "Notificación de sanción",
+            "Preaviso"
+        ])
 
-    if formulario == "Carta de despido":
-        st.subheader("📄 Carta de despido")
-        nombre = st.text_input("Nombre del empleado")
-        dni = st.text_input("DNI")
-        fecha = st.date_input("Fecha")
-        motivo = st.text_area("Motivo del despido")
+        if formulario == "Carta de despido":
+            st.subheader("📄 Carta de despido")
+            nombre = st.text_input("Nombre del empleado")
+            dni = st.text_input("DNI")
+            fecha = st.date_input("Fecha")
+            motivo = st.text_area("Motivo del despido")
 
-        if st.button("Generar carta"):
-            contenido = f"""
-[CARTA DE DESPIDO]
+            if st.button("Generar carta"):
+                contenido = f"""
+    [CARTA DE DESPIDO]
 
-A la fecha {fecha}, notificamos al Sr./Sra. {nombre}, DNI {dni}, su desvinculación de la empresa por el siguiente motivo:
+    A la fecha {fecha}, notificamos al Sr./Sra. {nombre}, DNI {dni}, su desvinculación de la empresa por el siguiente motivo:
 
-{motivo}
+    {motivo}
 
-Saludos cordiales,
+    Saludos cordiales,
 
-Firma
-Empresa
-"""
-            st.success("Carta generada:")
-            st.code(contenido)
+    Firma
+    Empresa
+    """
+                st.success("Carta generada:")
+                st.code(contenido)
 
-            path = generar_formulario_pdf("carta_despido", contenido)
-            with open(path, "rb") as f:
-                st.download_button("📥 Descargar PDF", f, file_name="carta_despido.pdf", mime="application/pdf")
+                path = generar_formulario_pdf("carta_despido", contenido)
+                with open(path, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name="carta_despido.pdf", mime="application/pdf")
 
-    elif formulario == "Certificado de trabajo":
-        st.subheader("📄 Certificado de trabajo")
-        nombre = st.text_input("Nombre del empleado")
-        fecha_ingreso = st.date_input("Fecha de ingreso")
-        fecha_egreso = st.date_input("Fecha de egreso")
-        puesto = st.text_input("Puesto desempeñado")
+        elif formulario == "Certificado de trabajo":
+            st.subheader("📄 Certificado de trabajo")
+            nombre = st.text_input("Nombre del empleado")
+            fecha_ingreso = st.date_input("Fecha de ingreso")
+            fecha_egreso = st.date_input("Fecha de egreso")
+            puesto = st.text_input("Puesto desempeñado")
 
-        if st.button("Generar certificado"):
-            contenido = f"""
-[CERTIFICADO DE TRABAJO]
+            if st.button("Generar certificado"):
+                contenido = f"""
+    [CERTIFICADO DE TRABAJO]
 
-Se deja constancia que el Sr./Sra. {nombre} trabajó en esta empresa desde el {fecha_ingreso} hasta el {fecha_egreso}, desempeñándose en el puesto de {puesto}.
+    Se deja constancia que el Sr./Sra. {nombre} trabajó en esta empresa desde el {fecha_ingreso} hasta el {fecha_egreso}, desempeñándose en el puesto de {puesto}.
 
-Firma
-Empresa
-"""
-            st.success("Certificado generado:")
-            st.code(contenido)
+    Firma
+    Empresa
+    """
+                st.success("Certificado generado:")
+                st.code(contenido)
 
-            path = generar_formulario_pdf("certificado_trabajo", contenido)
-            with open(path, "rb") as f:
-                st.download_button("📥 Descargar PDF", f, file_name="certificado_trabajo.pdf", mime="application/pdf")
+                path = generar_formulario_pdf("certificado_trabajo", contenido)
+                with open(path, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name="certificado_trabajo.pdf", mime="application/pdf")
 
-    elif formulario == "Comunicación de vacaciones":
-        st.subheader("📝 Comunicación de vacaciones")
-        nombre = st.text_input("Nombre del empleado")
-        desde = st.date_input("Desde")
-        hasta = st.date_input("Hasta")
+        elif formulario == "Comunicación de vacaciones":
+            st.subheader("📝 Comunicación de vacaciones")
+            nombre = st.text_input("Nombre del empleado")
+            desde = st.date_input("Desde")
+            hasta = st.date_input("Hasta")
 
-        if st.button("Generar comunicación"):
-            contenido = f"""
-[COMUNICACIÓN DE VACACIONES]
+            if st.button("Generar comunicación"):
+                contenido = f"""
+    [COMUNICACIÓN DE VACACIONES]
 
-Se informa al Sr./Sra. {nombre} que se le otorgarán vacaciones desde el día {desde} hasta el {hasta}, inclusive.
+    Se informa al Sr./Sra. {nombre} que se le otorgarán vacaciones desde el día {desde} hasta el {hasta}, inclusive.
 
-Saludos cordiales,
+    Saludos cordiales,
 
-Firma
-Empresa
-"""
-            st.success("Comunicación generada:")
-            st.code(contenido)
+    Firma
+    Empresa
+    """
+                st.success("Comunicación generada:")
+                st.code(contenido)
 
-            path = generar_formulario_pdf("comunicacion_vacaciones", contenido)
-            with open(path, "rb") as f:
-                st.download_button("📥 Descargar PDF", f, file_name="comunicacion_vacaciones.pdf", mime="application/pdf")
+                path = generar_formulario_pdf("comunicacion_vacaciones", contenido)
+                with open(path, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name="comunicacion_vacaciones.pdf", mime="application/pdf")
 
-    elif formulario == "Notificación de sanción":
-        st.subheader("📋 Notificación de sanción")
-        nombre = st.text_input("Nombre del empleado")
-        motivo = st.text_area("Motivo de la sanción")
-        fecha = st.date_input("Fecha de notificación")
+        elif formulario == "Notificación de sanción":
+            st.subheader("📋 Notificación de sanción")
+            nombre = st.text_input("Nombre del empleado")
+            motivo = st.text_area("Motivo de la sanción")
+            fecha = st.date_input("Fecha de notificación")
 
-        if st.button("Generar notificación"):
-            contenido = f"""
-[NOTIFICACIÓN DE SANCIÓN]
+            if st.button("Generar notificación"):
+                contenido = f"""
+    [NOTIFICACIÓN DE SANCIÓN]
 
-Por medio de la presente se informa al Sr./Sra. {nombre} que se le aplica una sanción disciplinaria con fecha {fecha}, por el siguiente motivo:
+    Por medio de la presente se informa al Sr./Sra. {nombre} que se le aplica una sanción disciplinaria con fecha {fecha}, por el siguiente motivo:
 
-{motivo}
+    {motivo}
 
-Firma
-Empresa
-"""
-            st.success("Notificación generada:")
-            st.code(contenido)
+    Firma
+    Empresa
+    """
+                st.success("Notificación generada:")
+                st.code(contenido)
 
-            path = generar_formulario_pdf("notificacion_sancion", contenido)
-            with open(path, "rb") as f:
-                st.download_button("📥 Descargar PDF", f, file_name="notificacion_sancion.pdf", mime="application/pdf")
+                path = generar_formulario_pdf("notificacion_sancion", contenido)
+                with open(path, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name="notificacion_sancion.pdf", mime="application/pdf")
 
-    elif formulario == "Preaviso":
-        st.subheader("📃 Preaviso")
-        nombre = st.text_input("Nombre del empleado")
-        fecha = st.date_input("Fecha")
-        motivo = st.text_area("Motivo del preaviso")
+        elif formulario == "Preaviso":
+            st.subheader("📃 Preaviso")
+            nombre = st.text_input("Nombre del empleado")
+            fecha = st.date_input("Fecha")
+            motivo = st.text_area("Motivo del preaviso")
 
-        if st.button("Generar preaviso"):
-            contenido = f"""
-[PREAVISO DE DESVINCULACIÓN]
+            if st.button("Generar preaviso"):
+                contenido = f"""
+    [PREAVISO DE DESVINCULACIÓN]
 
-En fecha {fecha} se notifica al Sr./Sra. {nombre} el preaviso correspondiente por:
+    En fecha {fecha} se notifica al Sr./Sra. {nombre} el preaviso correspondiente por:
 
-{motivo}
+    {motivo}
 
-Firma
-Empresa
-"""
-            st.success("Preaviso generado:")
-            st.code(contenido)
+    Firma
+    Empresa
+    """
+                st.success("Preaviso generado:")
+                st.code(contenido)
 
-            path = generar_formulario_pdf("preaviso", contenido)
-            with open(path, "rb") as f:
-                st.download_button("📥 Descargar PDF", f, file_name="preaviso.pdf", mime="application/pdf")
+                path = generar_formulario_pdf("preaviso", contenido)
+                with open(path, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name="preaviso.pdf", mime="application/pdf")
 
 def crear_cuentas_de_prueba():
     engine_global = create_engine("sqlite:///./cuentas.db", connect_args={"check_same_thread": False})
@@ -909,3 +926,42 @@ def crear_cuentas_de_prueba():
     db.close()
 
 crear_cuentas_de_prueba()
+
+if menu_principal == "Simulador":
+    st.empty()
+    with st.container():
+        st.markdown("<style>.block-container { padding-top: 1rem; }</style>", unsafe_allow_html=True)
+        import pandas as pd
+        st.title("🧠 Simulador de Situaciones Laborales")
+        st.markdown("Estas son situaciones reales que pueden surgir en una PyME. Elegí una categoría y una situación, y hacé clic en 'Generar respuestas' para ver cómo actuar.")
+
+        try:
+            df = pd.read_csv("Simulador_de_Situaciones_PYME.csv")
+
+            # Limpiar espacios invisibles
+            df["Categoría"] = df["Categoría"].astype(str).str.strip().str.replace("\n", "").str.replace("\r", "")
+            df["Situación"] = df["Situación"].astype(str).str.strip().str.replace("\n", "").str.replace("\r", "")
+            df = df.drop_duplicates(subset=["Categoría", "Situación"])
+
+            # Selección de categoría y situación
+            categorias = sorted(df["Categoría"].unique())
+            categoria_seleccionada = st.selectbox("Seleccioná una categoría", categorias)
+
+            df_filtrado = df[df["Categoría"] == categoria_seleccionada]
+            situaciones = sorted(df_filtrado["Situación"].unique())
+            situacion_seleccionada = st.selectbox("Seleccioná una situación", situaciones)
+
+            # Botón para generar respuestas
+            if st.button("🔄 Generar respuestas"):
+                fila = df_filtrado[df_filtrado["Situación"] == situacion_seleccionada]
+
+                if not fila.empty:
+                    st.markdown("### 💡 Posibles respuestas:")
+                    for i in range(1, 4):
+                        st.markdown(f"**Respuesta {i}:** {fila.iloc[0][f'Respuesta {i}']}")
+                else:
+                    st.warning("No se encontró la situación seleccionada.")
+
+        except Exception as e:
+            st.error("No se pudo cargar el simulador. Verificá que el archivo esté correcto.")
+            st.exception(e)
