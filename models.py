@@ -1,7 +1,10 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, ForeignKey, create_engine, Text
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from sqlalchemy import Column, String
-
+from sqlalchemy import Date
+from datetime import date
+from sqlalchemy import Enum
+import enum
 # Configuración de la base de datos SQLite
 DATABASE_URL = "sqlite:///./rrhh.db"
 
@@ -72,6 +75,37 @@ class CuentaEmpresa(Base):
     usuario = Column(String, unique=True, index=True)
     password = Column(String)
     base_datos = Column(String)
+
+class Busqueda(Base):
+    __tablename__ = "busquedas"
+    id = Column(Integer, primary_key=True, index=True)
+    puesto = Column(String)
+    centro_costo = Column(String)
+    fecha_apertura = Column(Date)
+    descripcion = Column(Text)
+    estado = Column(String)  # Abierta / Cerrada
+    responsable = Column(String)
+
+    postulantes = relationship("Postulante", back_populates="busqueda")
+
+class EstadoSeleccion(str, enum.Enum):
+    postulado = "Postulado"
+    entrevistado = "Entrevistado"
+    seleccionado = "Seleccionado"
+    rechazado = "Rechazado"
+
+class Postulante(Base):
+    __tablename__ = "postulantes"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String)
+    email = Column(String)
+    telefono = Column(String)
+    busqueda_id = Column(Integer, ForeignKey("busquedas.id"))
+    cv = Column(String, nullable=True)  # Nombre del archivo CV
+    notas = Column(Text)
+    estado = Column(String)  # Postulado, Entrevistado, Seleccionado, Rechazado
+
+    busqueda = relationship("Busqueda", back_populates="postulantes")
 
 # Conexión global para autenticación de cuentas
 engine_global = create_engine("sqlite:///./cuentas.db", connect_args={"check_same_thread": False})

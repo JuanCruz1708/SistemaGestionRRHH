@@ -66,3 +66,20 @@ def get_engine_for_user(empresa_id):
 
 def inicializar_base_cliente(engine):
     Base.metadata.create_all(bind=engine)
+
+def agregar_busqueda(puesto_id, centro_costo_id, fecha_apertura, descripcion, estado, responsable):
+    db = st.session_state["SessionLocal"]()
+    nueva = Busqueda(
+        puesto_id=puesto_id,
+        centro_costo_id=centro_costo_id,
+        fecha_apertura=fecha_apertura,
+        descripcion=descripcion,
+        estado=estado,
+        responsable=responsable
+    )
+    db.add(nueva)
+    db.commit()
+    db.close()
+
+def obtener_busquedas():
+    db = st.session_state

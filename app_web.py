@@ -1,5 +1,5 @@
 import streamlit as st
-from models import Base, Empleado, Licencia, Puesto, Usuario, CentroCosto
+from models import Base, Empleado, Licencia, Puesto, Usuario, CentroCosto, Busqueda, Postulante, EstadoSeleccion
 import pandas as pd
 from sqlalchemy.orm import joinedload
 import networkx as nx
@@ -13,6 +13,13 @@ from main import get_engine_for_user, SessionGlobal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from main import inicializar_base_cliente  # Asegurate de importar esta función
+import matplotlib.pyplot as plt
+import uuid
+import os
+
+# Crear carpeta si no existe
+if not os.path.exists("archivos_cv"):
+    os.makedirs("archivos_cv")
 #from openai import OpenAI
 #client = OpenAI(api_key="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")
 from reportlab.lib.pagesizes import letter
@@ -85,6 +92,19 @@ def obtener_usuarios():
     return usuarios
 
 st.set_page_config(page_title="RRHH", layout="wide")
+
+def agregar_columna_busqueda_si_falta(engine):
+    with engine.connect() as connection:
+        try:
+            connection.execute("ALTER TABLE postulantes ADD COLUMN busqueda_id INTEGER;")
+            print("✅ Columna 'busqueda_id' agregada a la tabla 'postulantes'.")
+        except Exception as e:
+            if "duplicate column name" in str(e).lower():
+                print("ℹ️ La columna 'busqueda_id' ya existía.")
+            elif "no such table" in str(e).lower():
+                print("ℹ️ La tabla 'postulantes' aún no existe.")
+            else:
+                print("❌ Error al agregar columna:", e)
 
 def iniciar_sesion():
     st.header("🔐 Iniciar sesión")  # se ve solo en login
@@ -296,7 +316,7 @@ def agregar_centro_costo(nombre):
 # ========================= INTERFAZ STREAMLIT =============================
 st.sidebar.title("RRHH")
 
-menu_principal = st.sidebar.radio("Menú", ["Inicio", "Gestión Nómina", "Formularios", "Asesoramiento", "Simulador"])
+menu_principal = st.sidebar.radio("Menú", ["Inicio", "Gestión Nómina", "Formularios", "Reclutamiento", "Asesoramiento", "Simulador"])
 
 if menu_principal == "Inicio":
     st.empty()
@@ -965,3 +985,136 @@ if menu_principal == "Simulador":
         except Exception as e:
             st.error("No se pudo cargar el simulador. Verificá que el archivo esté correcto.")
             st.exception(e)
+
+def mostrar_reclutamiento():
+    st.title("📋 Módulo de Reclutamiento")
+    opcion = st.radio("Seleccionar sección", ["Búsquedas abiertas", "Postulantes"])
+
+    if opcion == "Búsquedas abiertas":
+        mostrar_busquedas()
+    elif opcion == "Postulantes":
+        mostrar_postulantes()
+def mostrar_busquedas():
+    st.title("🔍 Gestión de Búsquedas Laborales")
+    SessionLocal = st.session_state["SessionLocal"]
+    db = SessionLocal()
+
+    puestos = db.query(Puesto).all()
+    opciones_puestos = {p.nombre: p.id for p in puestos}
+
+    with st.form("form_busqueda"):
+        nombre = st.text_input("Nombre de la búsqueda")
+        puesto_nombre = st.selectbox("Puesto buscado", list(opciones_puestos.keys()))
+        descripcion = st.text_area("Descripción del perfil")
+        fecha_apertura = st.date_input("Fecha de apertura")
+
+        if st.form_submit_button("Crear búsqueda"):
+            nueva_busqueda = Busqueda(
+                nombre=nombre,
+                puesto_id=opciones_puestos[puesto_nombre],
+                descripcion=descripcion,
+                fecha_apertura=fecha_apertura
+            )
+            db.add(nueva_busqueda)
+            db.commit()
+            st.success("✅ Búsqueda creada correctamente")
+
+    st.subheader("📋 Búsquedas existentes")
+    busquedas = db.query(Busqueda).all()
+    for b in busquedas:
+        st.markdown(f"**{b.nombre}** - {b.fecha_apertura.strftime('%d/%m/%Y')}  \n_Puesto: {b.puesto.nombre}_  \n{b.descripcion}")
+        st.divider()
+
+def mostrar_postulantes():
+    st.subheader("👤 Postulantes")
+
+    db = st.session_state["SessionLocal"]()
+    postulantes = db.query(Postulante).all()
+    busquedas = db.query(Busqueda).all()
+
+    # Crear diccionario para búsqueda: nombre → id
+    opciones_busquedas = {b.puesto: b.id for b in busquedas}
+
+    # Filtros
+    filtro_busqueda = st.selectbox("🔍 Filtrar por Búsqueda", ["Todas"] + list(opciones_busquedas.keys()))
+    filtro_estado = st.selectbox("🔍 Filtrar por Estado", ["Todos", "En revisión", "Entrevistado", "Descartado", "Seleccionado"])
+
+    # Construir query filtrada
+    query = db.query(Postulante)
+    if filtro_busqueda != "Todas":
+        busqueda_id = opciones_busquedas[filtro_busqueda]
+        query = query.filter(Postulante.busqueda_id == busqueda_id)
+    if filtro_estado != "Todos":
+        query = query.filter(Postulante.estado == filtro_estado)
+
+    postulantes_filtrados = query.all()
+    st.write(f"🔎 Se encontraron {len(postulantes_filtrados)} postulantes.")
+
+    # Mostrar postulantes
+    for p in postulantes_filtrados:
+        st.markdown(f"**{p.nombre}** - {p.email}")
+        st.text(f"📞 Teléfono: {p.telefono}")
+        st.text(f"📌 Estado: {p.estado}")
+        st.write(f"📝 Notas: {p.notas or 'Sin notas'}")
+        if p.cv:
+            ruta_cv = os.path.join("archivos_cv", p.cv)
+            if os.path.exists(ruta_cv):
+                with open(ruta_cv, "rb") as f:
+                    st.download_button("⬇️ Descargar CV", f, file_name=p.cv)
+        st.markdown("---")
+
+    # Formulario para nuevo postulante
+    st.subheader("➕ Nuevo Postulante")
+    nombre = st.text_input("Nombre")
+    email = st.text_input("Email")
+    telefono = st.text_input("Teléfono")
+    estado = st.selectbox("Estado", ["En revisión", "Entrevistado", "Descartado", "Seleccionado"])
+    notas = st.text_area("Notas")
+    busqueda_nombre = st.selectbox("Asociar a Búsqueda", ["Seleccionar..."] + list(opciones_busquedas.keys()))
+    if busqueda_nombre != "Seleccionar...":
+        busqueda_id = opciones_busquedas[busqueda_nombre]
+    else:
+        busqueda_id = None
+    cv_file = st.file_uploader("📄 Subir CV", type=["pdf", "doc", "docx"])
+
+    if st.button("Guardar Postulante"):
+        if not busqueda_id:
+            st.error("⚠️ Debes seleccionar una búsqueda para asociar al postulante.")
+        else:
+            nuevo_postulante = Postulante(
+                nombre=nombre,
+                email=email,
+                telefono=telefono,
+                estado=estado,
+                notas=notas,
+                busqueda_id=busqueda_id,
+            )
+
+        if cv_file:
+            cv_filename = f"{uuid.uuid4()}_{cv_file.name}"
+            with open(os.path.join("archivos_cv", cv_filename), "wb") as f:
+                f.write(cv_file.read())
+            nuevo_postulante.cv = cv_filename
+
+        db.add(nuevo_postulante)
+        db.commit()
+        st.success("✅ Postulante guardado con éxito.")
+
+def mostrar_embudo(postulantes):
+    estados = [e.value for e in EstadoSeleccion]
+    conteo = {estado: 0 for estado in estados}
+    for p in postulantes:
+        conteo[p.estado] += 1
+
+    fig, ax = plt.subplots()
+    ax.barh(list(conteo.keys()), list(conteo.values()))
+    ax.set_xlabel("Cantidad")
+    ax.set_title("Embudo de Selección")
+    st.pyplot(fig)
+
+if menu_principal == "Reclutamiento":
+    seccion_reclutamiento = st.sidebar.radio("Secciones", ["Búsquedas", "Postulantes"])
+    if seccion_reclutamiento == "Búsquedas":
+        mostrar_busquedas()
+    elif seccion_reclutamiento == "Postulantes":
+        mostrar_postulantes()

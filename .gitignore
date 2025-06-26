@@ -6,3 +6,7 @@ desktop.ini
 .vscode/
 .env
 .DS_Store
+# Ignorar todos los .db excepto estos:
+!empresa1.db.db
+!empresa2.db.db
+!cuentas.db
