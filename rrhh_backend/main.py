@@ -7,11 +7,19 @@ import bcrypt
 import models, schemas
 from database import get_db_global, get_db_cliente
 import crud
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig()
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 app = FastAPI()
+
+# Asegúrate de crear la carpeta uploads si no existe
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+
+# Monta la carpeta uploads para servir archivos estáticos
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
