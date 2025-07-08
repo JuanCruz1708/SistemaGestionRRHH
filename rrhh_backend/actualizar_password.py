@@ -1,27 +1,18 @@
-from sqlalchemy.orm import Session
-from database import SessionGlobal
-import models
 import bcrypt
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+import models
 
-# Configuración
-usuario_a_actualizar = "admin"
-nueva_contraseña = "admin123"
+engine = create_engine("sqlite:///cuentas.db")
+Session = sessionmaker(bind=engine)
+session = Session()
 
-def actualizar_password():
-    db: Session = SessionGlobal()
-    try:
-        cuenta = db.query(models.CuentaEmpresa).filter(models.CuentaEmpresa.usuario == usuario_a_actualizar).first()
-        if not cuenta:
-            print(f"❌ El usuario '{usuario_a_actualizar}' no existe.")
-            return
-        hashed_password = bcrypt.hashpw(nueva_contraseña.encode('utf-8'), bcrypt.gensalt())
-        cuenta.password = hashed_password.decode('utf-8')
-        db.commit()
-        print(f"✅ Contraseña de '{usuario_a_actualizar}' actualizada correctamente a '{nueva_contraseña}'.")
-    except Exception as e:
-        print(f"❌ Error al actualizar la contraseña: {e}")
-    finally:
-        db.close()
-
-if __name__ == "__main__":
-    actualizar_password()
+usuario = session.query(models.CuentaEmpresa).filter(models.CuentaEmpresa.usuario == "admin").first()
+if usuario:
+    nueva_password = "admin123"
+    hashed_password = bcrypt.hashpw(nueva_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    usuario.password = hashed_password
+    session.commit()
+    print("✅ Contraseña actualizada correctamente")
+else:
+    print("❌ Usuario no encontrado")

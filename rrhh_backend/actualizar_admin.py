@@ -14,22 +14,18 @@ CREATE TABLE IF NOT EXISTS cuentas_empresa (
 )
 """)
 
-# Generar el hash de la contraseña correctamente
-plain_password = "admin123"
-hashed_password = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+password_hash = bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-# Insertar el usuario con contraseña hasheada
 cursor.execute("""
 INSERT OR IGNORE INTO cuentas_empresa (nombre_empresa, usuario, password, base_datos)
 VALUES (?, ?, ?, ?)
-""", ("Alican", "admin", hashed_password, "cliente1.db"))
+""", ("Alican", "admin", password_hash, "cliente1.db"))
 
-# Si ya existía, actualizar la contraseña con el hash
 cursor.execute("""
 UPDATE cuentas_empresa SET password = ?, base_datos = ? WHERE usuario = ?
-""", (hashed_password, "cliente1.db", "admin"))
+""", (password_hash, "cliente1.db", "admin"))
 
 conn.commit()
 conn.close()
 
-print("✅ Usuario 'admin' insertado/actualizado correctamente en cuentas.db con contraseña hasheada.")
+print("✅ Usuario 'admin' creado con contraseña 'admin123'. Hash generado:", password_hash)

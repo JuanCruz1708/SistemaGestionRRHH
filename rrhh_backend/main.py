@@ -1,6 +1,6 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Depends, Form, File, UploadFile
+from fastapi import FastAPI, HTTPException, Depends, Form, File, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import bcrypt
@@ -38,8 +38,22 @@ def register_cuenta(data: schemas.CuentaEmpresaCreate, db: Session = Depends(get
     return cuenta
 
 @app.post("/login/")
-def login(data: schemas.LoginRequest):
-    return {"mensaje": "Login exitoso", "usuario": data.usuario}
+def login(data: schemas.LoginRequest, db: Session = Depends(get_db_global)):
+    usuario = db.query(models.CuentaEmpresa).filter(models.CuentaEmpresa.usuario == data.usuario).first()
+    if not usuario:
+        print("❌ Usuario no encontrado en DB")
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+
+    print("✅ Usuario encontrado:", usuario.usuario)
+    print("✅ Password recibido:", data.password)
+    print("✅ Password en DB:", usuario.password)
+
+    if not bcrypt.checkpw(data.password.encode('utf-8'), usuario.password.encode('utf-8')):
+        print("❌ Contraseña no coincide con bcrypt")
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+
+    print("✅ Login exitoso")
+    return {"mensaje": "Login exitoso", "usuario": usuario.usuario}
 
 @app.get("/empleados/")
 def obtener_empleados(db: Session = Depends(get_db_cliente)):
